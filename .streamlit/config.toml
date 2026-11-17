@@ -1,0 +1,13 @@
+# Presentation-friendly defaults (also used by Streamlit Community Cloud)
+[client]
+toolbarMode = "minimal"      # hide the developer "Deploy" / settings menu
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#1B2420"
+backgroundColor = "#F6F5F1"
+secondaryBackgroundColor = "#ECEAE4"
+textColor = "#1B2420"
