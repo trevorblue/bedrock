@@ -80,6 +80,18 @@ header[data-testid="stHeader"] {{ display: none; }}
              color: {MUTED}; line-height: 1.6; }}
 .bd-stock b {{ color: {INK}; }}
 .bd-foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 30px; padding-top: 12px; border-top: 1px solid {LINE}; }}
+.bd-demo {{ border: 2px dashed {ACCENT}; border-radius: 14px; padding: 14px 18px; margin: 18px 0 4px;
+            background: rgba(184,58,43,0.06); color: {INK}; font-size: 15px; line-height: 1.5; }}
+.bd-demo b {{ color: {ACCENT}; letter-spacing: .06em; }}
+.bd-table {{ width: 100%; border-collapse: collapse; background: {CARD}; border: 1px solid {LINE}; border-radius: 14px;
+             overflow: hidden; font-size: 14.5px; margin: 4px 0 18px; }}
+.bd-table th {{ text-align: left; font-size: 11.5px; letter-spacing: .08em; color: {MUTED}; font-weight: 700;
+                padding: 11px 14px; border-bottom: 1px solid {LINE}; text-transform: uppercase; }}
+.bd-table td {{ padding: 11px 14px; border-bottom: 1px solid {LINE}; vertical-align: top; color: {INK}; line-height: 1.45; }}
+.bd-table tr:last-child td {{ border-bottom: none; }}
+.bd-pill {{ display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }}
+.bd-pill.good {{ color: #1F7A4D; background: #E3F2E9; }} .bd-pill.ok {{ color: #8A5A00; background: #FBEFD5; }}
+.bd-pill.bad {{ color: {ACCENT}; background: #F7E4E0; }} .bd-pill.na {{ color: {MUTED}; background: #ECEAE4; }}
 [data-testid="stPlotlyChart"] {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 16px; padding: 0;
                                  overflow: hidden; }}
 [data-testid="stExpander"] details {{ border: 1px solid {LINE}; border-radius: 12px; background: transparent; }}
@@ -161,6 +173,16 @@ def short(name: str) -> str:
     return re.sub(r"\s+(Ltd|Plc|Limited|PLC|Holdings Ltd|Group Plc)\.?$", "", str(name)).strip()
 
 
+def pill(text: str, tone: str) -> str:
+    return f"<span class='bd-pill {tone}'>{escape(text)}</span>"
+
+
+def table(head: list[str], rows: list[list[str]]) -> None:
+    th = "".join(f"<th>{h}</th>" for h in head)
+    tr = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+    html(f"<table class='bd-table'><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>")
+
+
 def nice_date(s: str, fmt: str = "%d %b %Y") -> str:
     return pd.Timestamp(s).strftime(fmt).lstrip("0")
 
@@ -183,6 +205,8 @@ def load():
         crash_sum=json.loads((OUT / "crash_summary.json").read_text()) if (OUT / "crash_summary.json").exists() else None,
         crash_live=opt("crash_live"), crash_dec=opt("crash_deciles"), crash_cmp=opt("crash_compare"),
         crash_year=opt("crash_by_year"), crash_rob=opt("crash_robust"), crash_imp=opt("crash_importance"),
+        radar_sum=json.loads((OUT / "radar_summary.json").read_text()) if (OUT / "radar_summary.json").exists() else None,
+        radar_live=opt("radar_live"), demo=opt("demo_fundamentals"),
     )
 
 
@@ -239,9 +263,12 @@ html(f"<div class='bd-top'><div class='bd-brand'><span class='bd-mark'></span>Be
      f"<span class='bd-tagline'>NSE fragility monitor</span></div>"
      f"<div class='bd-asof'>Prices to {nice_date(ASOF['stocks'])} · foreign flows to "
      f"{nice_date(ASOF['flows'], '%b %Y')}</div></div>")
-SCREENS = ["Overview", "Market depth", "Sell-off alert", "Crash risk", "Speculation", "Stress test"]
-if D["crash_sum"] is None:
-    SCREENS.remove("Crash risk")
+SCREENS = ["Overview", "Market depth", "Sell-off alert", "Crash risk", "Speculation", "Stress test", "Opportunities",
+           "Stock report", "Fundamentals (demo)", "Market-ready"]
+for s_, need in [("Crash risk", D["crash_sum"]), ("Opportunities", D["radar_sum"]), ("Stock report", D["radar_sum"]),
+                 ("Fundamentals (demo)", len(D["demo"]) or None)]:
+    if need is None:
+        SCREENS.remove(s_)
 screen = st.segmented_control("Screen", SCREENS, default="Overview", key="nav", label_visibility="collapsed",
                               on_change=keep("nav", "Overview")) or "Overview"
 
@@ -559,7 +586,7 @@ elif screen == "Speculation":
                     "news; Bedrock flagged it on the second day.")
 
 # ================================================================= STRESS TEST
-else:
+elif screen == "Stress test":
     ss = st.session_state
     amount, days = ss.get("amt", DEFAULT_SCENARIO_KES / 1e9), ss.get("days", DEFAULT_SCENARIO_DAYS)
     part, cut = ss.get("part", PARTICIPATION), ss.get("cut", STRATEGIC_CUTOFF)
@@ -611,6 +638,245 @@ else:
                     "can absorb at most the chosen share of its normal daily trading. Price impact uses the standard "
                     "square-root law: volatility × √(amount sold ÷ normal daily trading). Absorbed = clears within the "
                     "window · strained = within 4× · trapped = longer, or no trades in 120 days.")
+
+# ================================================================= OPPORTUNITY RADAR
+elif screen == "Opportunities":
+    RS, RL = D["radar_sum"], D["radar_live"].copy()
+    pos = st.session_state.get("rpos") or 10e6
+    tag = f"{int(pos / 1e6)}m"
+    ok = RL[RL[f"exit_ok_{tag}"]]
+    paper_top = RL[RL["paper_rank"] <= 10]
+    blocked = paper_top[~paper_top[f"exit_ok_{tag}"]]
+    hero("OPPORTUNITY RADAR", f"{len(ok)} of {len(RL)} stocks pass the “can you get out?” check for {kes(pos)}",
+         "Each stock is scored on momentum, stability and resilience. It only counts as an opportunity if the "
+         "position could be sold within 20 trading days: on the NSE, a stock can look great on paper and still be "
+         "impossible to sell.")
+    st.segmented_control("Position to sell", [1e6, 10e6, 50e6], default=10e6, format_func=kes, key="rpos",
+                         on_change=keep("rpos", 10e6))
+    kpis([(f"{RS['paper_fail_share_10m']:.0%}", "of top picks on paper could not be sold within 20 days "
+           "(KES 10m, 2016–2026)", True),
+          (f"{len(blocked)} of 10", f"of today’s top 10 on paper fail the exit check at {kes(pos)}", False),
+          (f"{RS['spread_avg']:+.1%}", "a month: top third beat bottom third (about "
+           f"{RS['spread_avg'] * 12:+.0%} a year)", False),
+          (f"{RS['spread_win_share']:.0%}", "of months the top third beat the bottom third", False)])
+    html("<div class='bd-note'><b>How sure:</b> the exit check is the proven part: without it, 2 in 3 “top picks” "
+         "could not be sold. The score points the right way, but a gap this size could still come from chance "
+         "about 1 time in 5, so treat it as a shortlist to research, not a buy signal.</div>")
+    model("Transparent scoring rule", "equal weights fixed in advance: momentum, stability, resilience",
+          "exit check first", f"tested on {RS['months']} months, 2016–2026")
+    a, b = st.columns(2, gap="medium")
+    with a:
+        top = ok.head(10).iloc[::-1].copy()
+        top["label"] = top["name"].map(short)
+        f = go.Figure(go.Bar(x=top["score"], y=top["label"], orientation="h", marker_color=BLUE, marker_line_width=0,
+                             customdata=np.c_[top["mom_12_1"], top["vol_60"] * np.sqrt(250), top[f"days_exit_{tag}"]],
+                             hovertemplate="<b>%{y}</b><br>score %{x:.2f}<br>12-month return %{customdata[0]:+.0%}"
+                                           "<br>volatility (yearly) %{customdata[1]:.0%}<br>days to sell "
+                                           "%{customdata[2]:.1f}<extra></extra>"))
+        f.update_xaxes(range=[0, 1])
+        chart(f, "Top opportunities you can get out of", f"Score 0 to 1 · all can sell {kes(pos)} within 20 days",
+              400, hbar=True)
+    with b:
+        if len(blocked):
+            bl = blocked.iloc[::-1].copy()
+            bl["label"] = bl["name"].map(short)
+            dx = bl[f"days_exit_{tag}"].replace(np.inf, 1e4)
+            f = go.Figure(go.Bar(x=dx, y=bl["label"], orientation="h", marker_color=RED,
+                                 marker_line_width=0, customdata=np.c_[bl["paper_rank"], bl["score"]],
+                                 text=["no trades" if np.isinf(d) else f"{d:,.0f} days" for d in bl[f"days_exit_{tag}"]],
+                                 textposition="outside",
+                                 cliponaxis=False,
+                                 hovertemplate="<b>%{y}</b><br>rank %{customdata[0]} on paper (score "
+                                               "%{customdata[1]:.2f})<br>%{x:,.0f} trading days to sell<extra></extra>"))
+            f.add_scatter(x=[20] * len(bl), y=bl["label"], mode="markers", showlegend=False, hoverinfo="skip",
+                          marker=dict(symbol="line-ns-open", size=28, color=INK, line=dict(width=2.5, color=INK)))
+            f.update_xaxes(type="log", range=[np.log10(2), np.log10(dx.max() * 6)], tickvals=[2, 20, 200, 2000],
+                           ticktext=["2", "20", "200", "2,000"])
+            chart(f, "Great on paper, but you can’t get out", f"Trading days to sell {kes(pos)} · black tick = the 20-day limit", 400, hbar=True)
+        else:
+            html(f"<div class='bd-stock'>All of today’s top 10 on paper pass the exit check at {kes(pos)}. "
+                 "Try a larger position to see which ones would be stuck.</div>")
+    with st.expander("Resilience index: which stocks held up when the market fell"):
+        rz = ok.sort_values("resilience", ascending=False).head(10)[["name", "resilience", "vol_60"]].copy()
+        rz["name"] = rz["name"].map(short)
+        rz["vol_60"] = rz["vol_60"] * np.sqrt(250)
+        st.dataframe(rz, hide_index=True, width="stretch", column_config={
+            "name": "Company", "resilience": st.column_config.NumberColumn(
+                "Vs market in falling months (avg, last 3 years)", format="percent"),
+            "vol_60": st.column_config.NumberColumn("Volatility (yearly)", format="percent")})
+        st.caption(f"Honest test: in {RS['res_months']} months when the market fell, stocks that had held up before "
+                   f"did only {RS['res_spread_avg']:+.1%} better than those that had not, which could be chance. "
+                   "Use it as history, not as a forecast.")
+    with st.expander("Full test results"):
+        table(["Measure (each month, 2016–2026)", "Result", "What it means"], [
+            ["Top third, next month (avg)", f"{RS['top_avg']:+.2%}", "stocks the radar liked"],
+            ["Bottom third, next month (avg)", f"{RS['bottom_avg']:+.2%}", "stocks the radar disliked"],
+            ["Difference", f"{RS['spread_avg']:+.2%} (t = {RS['spread_t']:.1f})",
+             "points the right way; t below 2 means not yet proven"],
+            ["Top third beat bottom third", f"{RS['spread_win_share']:.0%} of months", "50% would be a coin flip"],
+            ["Top picks on paper that fail the exit check", f"{RS['paper_fail_share_1m']:.0%} at KES 1m · "
+             f"{RS['paper_fail_share_10m']:.0%} at KES 10m", "why the exit check comes first"],
+            ["Resilience: held-up stocks in the next falling month", f"{RS['res_spread_avg']:+.2%} "
+             f"(t = {RS['res_spread_t']:.1f}, {RS['res_months']} months)", "no clear evidence it repeats"]])
+        st.caption(f"Test position KES 1m so that about {RS['avg_ok_stocks']:.0f} stocks pass each month and can be "
+                   "split into thirds. Weights were fixed before testing and never tuned.")
+
+# ================================================================= STOCK REPORT
+elif screen == "Stock report":
+    RL, CL = D["radar_live"], D["crash_live"]
+    names = EQ.sort_values("name")
+    codes = list(names["code"])
+    pick = st.selectbox("Choose a stock", codes, format_func=lambda c: f"{short(names.set_index('code').loc[c, 'name'])} ({c})",
+                        index=codes.index("SCOM") if "SCOM" in codes else 0, key="rep")
+    pos = st.session_state.get("reppos") or 10e6
+    s = EQ.set_index("code").loc[pick]
+    days = pos / (PARTICIPATION * s["adv_kes"]) if s["adv_kes"] > 0 else np.inf
+    exit_ok = days <= 20
+    rr = RL.set_index("code").loc[pick] if pick in set(RL["code"]) else None
+    cr = CL.set_index("code").loc[pick] if pick in set(CL["code"]) else None
+    fl = FLAGS[(FLAGS["code"] == pick) & (FLAGS["date"] >= FLAGS["date"].max() - pd.Timedelta(days=90))]
+    res0, _ = stress_run()
+    sr = res0.set_index("code").loc[pick] if pick in set(res0["code"]) else None
+    third = None if rr is None else ("top" if rr["score"] >= RL["score"].quantile(2 / 3) else
+                                     "bottom" if rr["score"] <= RL["score"].quantile(1 / 3) else "middle")
+    if not exit_ok:
+        verdict = f"Hard to get out of: selling {kes(pos)} would take {'forever (no trades)' if np.isinf(days) else f'about {days:,.0f} trading days'}"
+    elif cr is not None and cr["risk_decile"] >= 9:
+        verdict = "You can get out, but crash risk is high"
+    elif third == "top":
+        verdict = "You can get out, and it ranks in the top third of opportunities"
+    else:
+        verdict = "You can get out; no strong signal either way"
+    hero("STOCK REPORT", f"{escape(short(s['name']))}: {verdict[0].lower() + verdict[1:]}",
+         f"{escape(str(s['sector']))} · every signal Bedrock has on this stock, with the evidence and how sure we are.")
+    st.segmented_control("Position to sell", [1e6, 10e6, 50e6], default=10e6, format_func=kes, key="reppos",
+                         on_change=keep("reppos", 10e6))
+    d_txt = "no trades" if np.isinf(days) else ("under 1 day" if days < 1 else f"{days:,.0f} days")
+    rows = [[f"<b>Can you get out?</b>", pill("Yes" if exit_ok else "No", "good" if exit_ok else "bad"),
+             f"Selling {kes(pos)} takes {d_txt} at 20% of normal trading (about {kes(s['adv_kes'])} a day).",
+             pill("Strong", "good")]]
+    if rr is not None:
+        rows.append(["<b>Opportunity score</b>", pill(f"{third} third", "good" if third == "top" else "na"),
+                     f"Score {rr['score']:.2f} (rank {int(rr['paper_rank'])} of {len(RL)} on paper): 12-month return "
+                     f"{rr['mom_12_1']:+.0%}, volatility {rr['vol_60'] * np.sqrt(250):.0%} a year, "
+                     f"{rr['resilience']:+.1%} vs market in falling months.", pill("Not yet proven", "ok")])
+    if cr is not None:
+        hi = cr["risk_decile"] >= 9
+        rows.append(["<b>Crash risk next month</b>", pill(f"group {int(cr['risk_decile'])} of 10", "bad" if hi else "na"),
+                     f"Stocks in this group fell 15%+ in the next month {cr['group_crash_rate']:.0%} of the time "
+                     f"(average {D['crash_sum']['base_rate']:.1%}).", pill("Medium", "ok")])
+    rows.append(["<b>Speculation flags (90 days)</b>", pill(str(len(fl)), "bad" if len(fl) else "good"),
+                 ("Latest " + fl["date"].max().strftime("%d %b %Y") + ". " + (fl.sort_values("date")["news"].iloc[-1] or
+                  "News not checked yet.")) if len(fl) else "No unusual price jumps.", pill("Lead to check", "na")])
+    if sr is not None and sr["sell_kes"] > 0:
+        rows.append(["<b>If foreigners sell KES 2bn in a week</b>", pill(str(sr["status"]),
+                     "bad" if sr["status"] in ("trapped", "no market") else "ok" if sr["status"] == "strained" else "good"),
+                     f"Its share: {kes(sr['sell_kes'])}, about {sr['days_to_absorb']:,.0f} days to clear"
+                     + ("" if pd.isna(sr["price_impact"]) else f", price {sr['price_impact']:+.0%}") + ".",
+                     pill("Scenario", "na")])
+    table(["Signal", "Reading", "Evidence", "How sure"], rows)
+    need = pos / (PARTICIPATION * 20)
+    change = []
+    if not exit_ok:
+        change.append(f"Trading rising to about {kes(need)} a day would let {kes(pos)} be sold within 20 days.")
+    if cr is not None and cr["risk_decile"] >= 8:
+        change.append("A calmer price, or the end of a recent run-up, would move it to a lower crash-risk group.")
+    if rr is not None:
+        change.append("Momentum fading or volatility rising would lower its opportunity score.")
+    if len(fl):
+        change.append("News that explains the recent jumps would turn a speculation lead into an explained move.")
+    if change:
+        html("<div class='bd-stock'><b>What would change this view</b><br>" + "<br>".join(f"· {c}" for c in change)
+             + "</div>")
+    st.caption("Rules, not opinions: every line above is computed from the same tested models as the other screens. "
+               "Not investment advice.")
+
+# ================================================================= FUNDAMENTALS (DEMO)
+elif screen == "Fundamentals (demo)":
+    DM = D["demo"].copy()
+    html("<div class='bd-demo'><b>DEMO · SYNTHETIC DATA.</b> Fictional companies and invented numbers, made only to "
+         "show how this screen would work once real company financials are added (for example from Rock Data Plus). "
+         "Nothing here is real, and no other screen uses it.</div>")
+    hero("FUNDAMENTALS (DEMO)", "How a value-and-quality screen would work with real company financials",
+         "Each company is scored on value (price to earnings, dividend yield) and quality (return on equity, debt, "
+         "earnings growth), and must still pass the same “can you get out?” check.")
+    kpis([(f"{len(DM)}", "fictional demo companies", False),
+          (f"{int(DM['exit_ok'].sum())}", "pass the exit check (demo)", False),
+          (escape(DM.iloc[0]["company"]), "highest demo score", False)])
+    model("Value + quality score (demo)", "equal weights across five measures", "same exit check as the radar",
+          "not tested: needs real data")
+    a, b = st.columns([1, 1.2], gap="medium")
+    with a:
+        dd = DM.iloc[::-1]
+        f = go.Figure(go.Bar(x=dd["score"], y=dd["company"], orientation="h", marker_line_width=0,
+                             marker_color=np.where(dd["exit_ok"], BLUE, "#c9c6bd"),
+                             hovertemplate="<b>%{y}</b> (demo)<br>score %{x:.2f}<extra></extra>"))
+        f.update_xaxes(range=[0, 1])
+        chart(f, "Demo: value + quality score", "Fictional companies · blue = passes the exit check", 440, hbar=True)
+    with b:
+        show = DM[["company", "pe_ratio", "dividend_yield", "return_on_equity", "debt_to_equity", "earnings_growth",
+                   "days_to_exit_10m"]]
+        st.dataframe(show, hide_index=True, width="stretch", height=440, column_config={
+            "company": "Company (demo)", "pe_ratio": st.column_config.NumberColumn("P/E", format="%.1f"),
+            "dividend_yield": st.column_config.NumberColumn("Dividend yield", format="percent"),
+            "return_on_equity": st.column_config.NumberColumn("Return on equity", format="percent"),
+            "debt_to_equity": st.column_config.NumberColumn("Debt / equity", format="%.2f"),
+            "earnings_growth": st.column_config.NumberColumn("Earnings growth", format="percent"),
+            "days_to_exit_10m": st.column_config.NumberColumn("Days to sell KES 10m", format="%.1f")})
+    st.caption("With real financials this becomes the fourth part of the Opportunity Radar score, so it rates the "
+               "business, not only the share price. See Market-ready for the data it needs.")
+
+# ================================================================= MARKET-READY
+elif screen == "Market-ready":
+    hero("WHAT MAKES IT MARKET-READY", "Six data upgrades would take Bedrock from prototype to a weekly tool for "
+         "Rock’s clients", "Most of the gain is in data, and much of that data is what Rock Data Plus is built to "
+         "provide. Compute is not the constraint: everything reruns on a laptop in a few minutes.")
+    kpis([("#1 need", "daily foreign buying and selling for each stock: it improves the most models at once", True),
+          ("About 20×", "more data points for the sell-off alert with daily instead of monthly flows", False),
+          ("7", "analysis screens already working on public data, ready to rerun on Rock’s", False)])
+    table(["Upgrade", "Makes better", "Why the models get better", "Priority"], [
+        ["<b>Daily foreign buying and selling for each stock</b>", "Sell-off alert, crash risk, stress test",
+         "Shows who is selling which stock, every day. The alert becomes per-stock and daily, with about 20 times "
+         "more data points, and the stress test can use real foreign positions.", pill("Most needed", "bad")],
+        ["<b>Weekly market-wide foreign flows</b>", "Sell-off alert",
+         "About 600 data points instead of 140, so earlier warnings, and the economic inputs (exchange rate, "
+         "interest rates) get enough data to start helping.", pill("High", "ok")],
+        ["<b>Company financials</b> (earnings, dividends, balance sheets)", "Opportunity radar, Fundamentals",
+         "Adds value and quality to the score, turning today’s demo page into a tested screen of real businesses.",
+         pill("High", "ok")],
+        ["<b>Bid-ask spreads, order book, block-trade flags</b>", "Market depth, stress test",
+         "Measures the true cost of selling and separates one-off negotiated deals from everyday trading.",
+         pill("Medium", "na")],
+        ["<b>Dividends and corporate actions</b> (adjusted prices)", "Crash risk, speculation watch",
+         "Removes false “crashes” on dividend days and false “jumps” on share splits.", pill("Medium", "na")],
+        ["<b>Verified daily prices from Rock</b>", "Every screen",
+         "Replaces our reading of scanned NSE price lists (very close, but not perfect) with the source data.",
+         pill("Medium", "na")]])
+    table(["To be user-ready", "What it means"], [
+        ["Daily automatic refresh", "New data in every morning, no manual run"],
+        ["Alerts", "Email or SMS when the sell-off alert turns HIGH RISK or a holding fails the exit check"],
+        ["Watch-lists and stock reports", "Each client follows their own stocks"],
+        ["An API for Rock’s research team", "Pull Bedrock’s numbers straight into weekly research notes"]])
+    html("<div class='bd-eyebrow'>WHAT MAKES THE MODELS PRODUCTION-GRADE</div>"
+         "<div class='bd-sub'>Financial data moves through time and has fat tails, so the next generation of Bedrock’s "
+         "models adds dedicated time-series and stochastic methods on top of today’s tested machine learning. Each one "
+         "will be tested the same honest way: trained only on the past, compared with a simple rule, reported in "
+         "full.</div>")
+    table(["Upgrade", "What it adds", "Improves"], [
+        ["<b>Volatility forecasting</b> (GARCH family)", "Forecasts how jumpy each stock will be next month, instead "
+         "of assuming the last 60 days repeat. Volatility is the strongest crash signal, so a better forecast "
+         "sharpens crash risk directly.", "Crash risk, stress test"],
+        ["<b>Regime-switching models</b> (Markov)", "Detects when the market has moved into an “exit wave”, the "
+         "periods where most past sell-offs clustered (2020, 2022).", "Sell-off alert"],
+        ["<b>Self-exciting selling models</b> (Hawkes)", "Captures how one heavy selling day raises the chance of the "
+         "next, using daily foreign flows.", "Sell-off alert"],
+        ["<b>Tail-risk models</b> (extreme value theory)", "Estimates how big a rare crash could be, not only how "
+         "likely it is.", "Crash risk, stress test"],
+        ["<b>Probability calibration</b>", "Makes a reading of 53% mean a 53% chance, so scores can be used as "
+         "probabilities in client reports.", "Crash risk, sell-off alert"],
+        ["<b>Model monitoring and governance</b>", "Live tracking of hit rates, alerts when data or accuracy drifts, "
+         "versioned models, documented validation, and new models tested against the current one before they "
+         "replace it.", "Every model"]])
 
 html("<div class='bd-foot'>Sources: NSE daily prices (Mendeley Data, Wanjawa, CC BY 4.0; extended to "
      f"{nice_date(ASOF['stocks'])} from NSE daily price lists) · CMA Quarterly Statistical Bulletins · Central Bank of "

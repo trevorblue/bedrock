@@ -244,6 +244,6 @@ def run(stocks, indices, flows, sectors=None) -> dict:
     now["risk_decile"] = 10 - ((now["risk_rank"] - 1) * 10 // len(now))
     now["group_crash_rate"] = now["risk_decile"].map(dec.set_index("decile")["crash_rate"])
     gap = auc_gap_ci(wf, "xgboost", "vol_60")
-    return {"walk_forward": wf, "compare": compare, "by_year": by_year(wf), "deciles": dec,
+    return {"panel": panel, "walk_forward": wf, "compare": compare, "by_year": by_year(wf), "deciles": dec,
             "robust": pd.DataFrame(robust), "live": now, "importance": imp, "auc_gap_vs_volatility": gap,
             "n_samples": len(samples.dropna(subset=["fwd"])), "n_stocks": samples["code"].nunique()}

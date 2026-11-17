@@ -16,6 +16,10 @@ The Nairobi Securities Exchange is at record highs, but the market is shallow. A
 | Market depth | Every NSE stock ranked by how easy it is to sell, in tiers (Deep / Moderate / Thin / Frozen), with "days to exit a KES 10m position" |
 | Sell-off alert | Chance of heavy foreign selling next period, the top reasons, a HIGH RISK / NO CALL signal (no 'low risk' all-clear), and an honest out-of-sample test |
 | Crash risk | Each stock's risk of falling 15%+ in the next month (XGBoost, 14 inputs), its risk group and how often that group crashed in testing, against a simple volatility rule |
+| Opportunities | Opportunity Radar: stocks scored on momentum, stability and resilience, but only after the "can you get out?" exit check; plus the stocks that look good on paper but can't be sold |
+| Stock report | One page per stock: can you get out, opportunity score, crash risk, speculation flags, stress test, each with its evidence, how sure we are and what would change the view |
+| Fundamentals (demo) | **Synthetic demo data for fictional companies**, showing how a value-and-quality screen would work once real company financials are added. Not real; used nowhere else |
+| Market-ready | The data, product and model upgrades that would make Bedrock production-grade |
 | Speculation | Stock-days where price and volume broke from the stock's own normal and the market did not move with it |
 | Stress test | Choose a scenario (e.g. foreigners sell KES 2bn in 5 days) and see which stocks absorb it, which strain, and which are trapped |
 
@@ -70,6 +74,7 @@ To use **Rock Data Plus**, drop its CSV exports into `data/rock/` (see [data/roc
 - **Sell-off Alert (B):** A month counts as "heavy selling" if its net foreign flow is in the worst 25% of months. Three input sets × two models (logistic, shallow XGBoost) are compared with the plain base rate in a **walk-forward test** (retrained each month on past data only). All versions are reported. The live model is the winner, XGBoost on foreign flows alone: HIGH RISK calls hit 59% vs 26% normally (p = 0.004).
 - **Speculation Watch (C):** An Isolation Forest runs on each stock-day's return, volume, market-relative return and price range, compared with the stock's previous 60 days. Flags are validated by what happens over the next 5 and 20 days.
 - **Crash Risk (E):** One row per stock per month-end. Target: the stock falls 15% or more over the next 21 trading days. Inputs use only data known that day (returns, volatility, distance from 1-year high, liquidity, spikes, NASI, foreign flows). Walk-forward by year with purging, 2016–2026 (7,154 test stock-months). The riskiest 10% crashed 10.9% of the time vs 5.5% average; a "most volatile 10%" rule gets 9.2%, and the model's ranking is not clearly better than volatility alone. Both are reported.
+- **Opportunity Radar (F):** Equal-weight score (fixed in advance) of momentum (12-1 months), low volatility and resilience (return vs the market in falling months, last 3 years). A stock counts only if a position can be sold within 20 trading days at 20% of daily trading. Tested monthly 2016–2026: top third beat bottom third by +0.7% a month (t = 1.3, not yet proven); without the exit check 42% (KES 1m) to 67% (KES 10m) of top picks could not be sold. Resilience did not reliably repeat in the next falling month (+0.2%, t = 0.3).
 - **Stress Test:** A foreign sale is split by foreign-held value, with stakes above 50% treated as a parent's strategic holding. Days to absorb are computed at 20% of daily trading, and price impact uses the square-root law.
 
 ## Limitations

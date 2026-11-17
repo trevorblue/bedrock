@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bedrock import clean, crash, depth, nse_ocr, selloff, speculation, stress
+from bedrock import clean, crash, demo, depth, nse_ocr, radar, selloff, speculation, stress
 
 
 # ------------------------------------------------------------------ helpers
@@ -174,3 +174,33 @@ def test_crash_features_use_no_future_data():
     pd.testing.assert_frame_equal(a, b)                # ... leaves every feature on the cut-off day unchanged
     fwd = p2[p2["date"] == cut].set_index("code")["fwd"]
     assert (fwd <= crash.CRASH_DROP).all()             # but the outcome sees it
+
+
+# ------------------------------------------------------------------ opportunity radar (module F) + demo
+def test_radar_exit_check_blocks_thin_stocks():
+    days = radar.days_to_exit(pd.Series([50e6, 1e6, 0.0]), 10e6)     # KES a day traded
+    assert days.iloc[0] == pytest.approx(1.0)                        # 10m / (20% x 50m)
+    assert days.iloc[1] == pytest.approx(50.0) and days.iloc[1] > radar.EXIT_DAYS
+    assert np.isinf(days.iloc[2])                                    # never trades -> can't get out
+
+
+def test_radar_resilience_uses_no_future_data():
+    st, ix, fl = _crash_inputs(n=700)
+    m1 = radar.monthly(crash.build_panel(st, ix, fl), ix)
+    cut = m1["date"].drop_duplicates().sort_values().iloc[24]
+    st2, ix2 = st.copy(), ix.copy()
+    st2.loc[st2["date"] > cut, "ret"] = -0.05
+    ix2.loc[ix2["date"] > cut, "ret"] = 0.04
+    ix2.loc[ix2["date"] > cut, "close"] *= 3
+    m2 = radar.monthly(crash.build_panel(st2, ix2, fl), ix2)
+    cols = ["mom_12_1", "vol_60", "resilience"]
+    a = m1[m1["date"] == cut].set_index("code")[cols]
+    b = m2[m2["date"] == cut].set_index("code")[cols]
+    assert a["resilience"].notna().all()
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_demo_data_is_labelled_and_fictional():
+    d = demo.fundamentals_demo()
+    assert d["company"].str.startswith("Demo Company").all()
+    assert (d["data"] == demo.LABEL).all()

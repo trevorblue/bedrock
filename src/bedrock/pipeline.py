@@ -13,7 +13,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from . import clean, crash, depth, robustness, selloff, speculation, stress
+from . import clean, crash, demo, depth, radar, robustness, selloff, speculation, stress
 from .config import MANUAL, PROCESSED, ROCK
 
 OUT = PROCESSED / "outputs"
@@ -115,6 +115,18 @@ def main() -> None:
     _json(crash_summary, OUT / "crash_summary.json")
     print(f"  riskiest 10% crashed {mdl['top10_crash_rate']:.1%} of the time vs {mdl['base_rate']:.1%} average "
           f"(volatility rule {rule['top10_crash_rate']:.1%}); riskiest now: {', '.join(crash_summary['riskiest_now'])}")
+
+    print("Module F  Opportunity Radar + Resilience ...")
+    ra = radar.run(cr["panel"], indices)
+    ra["monthly_radar"].to_parquet(OUT / "radar_monthly.parquet", index=False)
+    ra["monthly_resilience"].to_parquet(OUT / "radar_resilience_monthly.parquet", index=False)
+    ra["live"].to_parquet(OUT / "radar_live.parquet", index=False)
+    _json(ra["summary"] | {"exit_days": radar.EXIT_DAYS, "test_position_kes": radar.TEST_POSITION},
+          OUT / "radar_summary.json")
+    s_ = ra["summary"]
+    print(f"  top third beat bottom third by {s_['spread_avg']:+.2%} a month (t = {s_['spread_t']:.1f}); "
+          f"{s_['paper_fail_share_1m']:.0%} of paper top picks fail the exit check at KES 1m")
+    demo.fundamentals_demo().to_parquet(OUT / "demo_fundamentals.parquet", index=False)
 
     print("Robustness checks ...")
     rb = robustness.run_all(stocks, share, sectors, sb["walk_forward"], sb["best_model"], scored, sb["dataset"])

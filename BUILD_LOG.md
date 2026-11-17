@@ -193,3 +193,19 @@ Raw probabilities run high (Brier skill −5%), so the dashboard reports each st
 crash rate. Riskiest on 16 Nov 2026: AMAC, CGEN, OCH, SKL, EVRD. No further versions were tried.
 
 **Checks:** 12 unit tests pass; all 6 screens OK; note PDF 4 pages; deck 9 slides.
+
+## Opportunity Radar, Stock report, demo page, market-ready roadmap (17 Nov 2026)
+
+Merged the team's Rock Atlas ideas into Bedrock (nothing removed):
+- **Opportunity Radar** (`radar.py`): exit check first ("can you get out?": sell the position within 20 trading
+  days at 20% of daily trading), then an equal-weight score of momentum, stability and resilience (the team's
+  Kenyan Market Resilience Index). Weights fixed before testing. Results, 129 months 2016–2026: top third
+  +0.87%/month vs bottom third +0.19% (difference +0.68%, t = 1.3, top won 56% of months: points the right way,
+  not yet proven). Without the exit check, 42% (KES 1m) and 67% (KES 10m) of "top picks" could not be sold.
+  Resilience test (54 falling months): +0.2%, t = 0.3, so past resilience does not reliably repeat.
+- **Stock report**: one page per stock combining every module, with evidence, how sure, and what would change the view.
+- **Fundamentals (demo)** (`demo.py`): synthetic data for fictional companies, clearly labelled, used nowhere else.
+- **Market-ready** screen: data upgrades (per-stock foreign trading first), user-ready features, and the model
+  upgrades that would make Bedrock production-grade (GARCH volatility, regime-switching, Hawkes, tail risk,
+  calibration, monitoring and governance).
+- Tests: 15 pass (new: exit check, resilience has no look-ahead, demo is labelled). All 10 screens OK.
