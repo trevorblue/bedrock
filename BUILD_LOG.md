@@ -226,3 +226,13 @@ Merged the team's Rock Atlas ideas into Bedrock (nothing removed):
 risk; second demo page **Foreign flows by stock (demo)** (synthetic, fictional companies, labelled).
 **Slides:** 13, adding GARCH, Opportunities, Stock report and Market-ready; last slide shows the new dashboard.
 **Checks:** 16 tests pass; all 12 screens OK.
+
+## Two-level navigation and demo copies of data-limited screens (17 Nov 2026)
+
+- Navigation rebuilt as sections (Overview · Market · Stocks · Demo (made-up data) · Plan & guide), with that
+  section's screens on a second row. 14 screens; the smoke check walks every section and screen.
+- Demo copies of the screens that richer data would improve, real screens untouched:
+  **Sell-off alert (demo)** runs the real sell-off model code on synthetic weekly flows (413 test weeks vs 78
+  months) and **Opportunities (demo)** adds value and quality from (synthetic) financials to the radar for
+  fictional companies. Both carry the red synthetic-data banner; their scores are not evidence of real skill.
+- The dashboard now reloads automatically when the pipeline writes new outputs.

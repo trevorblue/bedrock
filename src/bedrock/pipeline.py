@@ -129,6 +129,12 @@ def main() -> None:
           f"{s_['paper_fail_share_1m']:.0%} of paper top picks fail the exit check at KES 1m")
     demo.fundamentals_demo().to_parquet(OUT / "demo_fundamentals.parquet", index=False)
     demo.foreign_flows_demo().to_parquet(OUT / "demo_foreign_flows.parquet", index=False)
+    wk = demo.selloff_weekly_demo()
+    wk_wf, wk_live = demo.selloff_demo_results(wk)
+    wk.reset_index().to_parquet(OUT / "demo_selloff_flows.parquet", index=False)
+    wk_wf.to_parquet(OUT / "demo_selloff_walk_forward.parquet", index=False)
+    _json(wk_live, OUT / "demo_selloff_live.json")
+    demo.opportunities_demo().to_parquet(OUT / "demo_opportunities.parquet", index=False)
 
     print("Robustness checks ...")
     rb = robustness.run_all(stocks, share, sectors, sb["walk_forward"], sb["best_model"], scored, sb["dataset"])

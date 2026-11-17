@@ -62,3 +62,50 @@ def foreign_alert_demo(flows: pd.DataFrame, window: int = 10, line: float = -0.1
     g["net_share"] = g["net_foreign_kes"] / g["turnover_kes"]
     g["signal"] = np.where(g["net_share"] <= line, "HIGH RISK (demo)", "NO CALL (demo)")
     return g.reset_index().sort_values("net_share")
+
+
+# ---------------------------------------------------------------- demo clone: Sell-off alert on WEEKLY flows
+def selloff_weekly_demo(weeks: int = 520, seed: int = DEMO_SEED) -> pd.DataFrame:
+    """SYNTHETIC weekly net foreign flows (KES m) with calm spells and "exit waves", to show the Sell-off alert running
+    on weekly data, as Rock Data Plus could provide. The same model code as the real alert is run on it."""
+    rng = np.random.default_rng(seed + 2)
+    state, flows = 0, []
+    for _ in range(weeks):
+        if state == 0 and rng.random() < 0.05:
+            state = 1
+        elif state == 1 and rng.random() < 0.12:
+            state = 0
+        mu, sd = (60, 350) if state == 0 else (-700, 450)
+        flows.append(rng.normal(mu, sd))
+    idx = pd.date_range(end="2026-11-13", periods=weeks, freq="W-FRI", name="period")
+    df = pd.DataFrame({"flow": np.round(flows, 1)}, index=idx)
+    df["flow_3"] = df["flow"].rolling(3).sum()
+    df["flow_next"] = df["flow"].shift(-1)
+    return df
+
+
+def selloff_demo_results(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Run the REAL sell-off model code (walk-forward test + live reading) on the synthetic weekly flows."""
+    from .selloff import live_prediction, walk_forward
+    wf = walk_forward(df, ["flow", "flow_3"], min_train=104)
+    live = live_prediction(df, ["flow", "flow_3"], "xgboost")
+    live.pop("drivers", None)
+    live["period"] = str(pd.Timestamp(live["period"]).date())
+    return wf, live
+
+
+# ---------------------------------------------------------------- demo clone: Opportunity Radar WITH fundamentals
+def opportunities_demo(seed: int = DEMO_SEED) -> pd.DataFrame:
+    """SYNTHETIC full radar for the fictional demo companies: the real radar's three ingredients (momentum,
+    stability, resilience) plus value and quality from company financials, then the same exit check."""
+    d = fundamentals_demo(seed=seed).copy()
+    rng = np.random.default_rng(seed + 3)
+    n = len(d)
+    d["momentum_12m"] = rng.normal(0.15, 0.35, n).round(3)
+    d["volatility"] = rng.uniform(0.15, 0.60, n).round(3)
+    d["resilience"] = rng.normal(0.0, 0.03, n).round(3)
+    r = lambda s, asc=True: s.rank(pct=True, ascending=asc)  # noqa: E731
+    d["score_price_only"] = (r(d["momentum_12m"]) + r(d["volatility"], False) + r(d["resilience"])) / 3
+    d["score_full"] = (r(d["momentum_12m"]) + r(d["volatility"], False) + r(d["resilience"]) +
+                       d["value_score"] + d["quality_score"]) / 5
+    return d.sort_values("score_full", ascending=False).reset_index(drop=True)

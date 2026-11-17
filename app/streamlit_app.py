@@ -80,6 +80,9 @@ header[data-testid="stHeader"] {{ display: none; }}
              color: {MUTED}; line-height: 1.6; }}
 .bd-stock b {{ color: {INK}; }}
 .bd-foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 30px; padding-top: 12px; border-top: 1px solid {LINE}; }}
+.st-key-nav_sec button {{ font-weight: 600; }}
+[class*="st-key-nav_p"] {{ margin-top: -6px; }}
+[class*="st-key-nav_p"] button {{ background: transparent; }}
 .bd-question {{ margin: 22px 0 0; padding: 12px 16px; background: {CARD}; border: 1px solid {LINE};
                 border-left: 4px solid {ACCENT}; border-radius: 10px; font-size: 15.5px; color: {INK}; }}
 .bd-question span {{ font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: {MUTED}; margin-right: 8px; }}
@@ -199,6 +202,8 @@ QUESTIONS = {
     "Stress test": "If foreign investors sell a large amount quickly, which stocks break?",
     "Opportunities": "Which stocks look attractive, and can you actually get out of them?",
     "Stock report": "What does every Bedrock signal say about one stock, and how sure are we?",
+    "Sell-off alert (demo)": "What would the sell-off alert look like on weekly foreign flows, as Rock could provide?",
+    "Opportunities (demo)": "What would the Opportunity Radar look like with company financials added?",
     "Fundamentals (demo)": "How would a value-and-quality screen work once company financials are added?",
     "Foreign flows by stock (demo)": "What would a daily, stock-by-stock foreign selling alert look like with Rock’s data?",
     "Market-ready": "What would make Bedrock better, and ready for real clients?",
@@ -243,6 +248,15 @@ USED_FOR = {
                             ["Everything here is made-up data for fictional companies.",
                              "Value = a cheap price relative to earnings and dividends; quality = profitable, low debt, "
                              "growing. Grey bars fail the exit check, even in the demo."]),
+    "Sell-off alert (demo)": ("A copy of the real Sell-off alert screen, run on made-up weekly data, to show what "
+                              "Rock’s weekly foreign flows would add. The real screen is unchanged.",
+                              ["The model code is the same as the real alert; only the data is made up.",
+                               "With weekly data the alert updates every week and is tested on about five times more "
+                               "periods.", "Its scores here come from made-up data, so they are not evidence of real skill."]),
+    "Opportunities (demo)": ("A copy of the real Opportunity Radar, run on fictional companies, showing the full score "
+                             "once company financials are added. The real screen is unchanged.",
+                             ["Full score = momentum, stability, resilience (as now) plus value and quality from "
+                              "financial statements.", "The exit check still comes first, exactly as on the real screen."]),
     "Foreign flows by stock (demo)": ("Shows Rock the #1 upgrade: daily foreign buying and selling for each stock "
                                       "would turn the monthly, market-wide alert into a daily alert per stock.",
                                       ["Everything here is made-up data for fictional companies.",
@@ -286,7 +300,8 @@ GLOSSARY = [
 
 # ---------------------------------------------------------------- data
 @st.cache_data
-def load():
+def load(stamp: float = 0.0):
+    """Read every output once; `stamp` (newest file time) makes a rerun of the pipeline reload automatically."""
     need = OUT / "headline.json"
     if not need.exists():
         return None
@@ -304,11 +319,13 @@ def load():
         crash_year=opt("crash_by_year"), crash_rob=opt("crash_robust"), crash_imp=opt("crash_importance"),
         radar_sum=json.loads((OUT / "radar_summary.json").read_text()) if (OUT / "radar_summary.json").exists() else None,
         radar_live=opt("radar_live"), demo=opt("demo_fundamentals"), demo_ff=opt("demo_foreign_flows"),
+        demo_sf=opt("demo_selloff_flows"), demo_swf=opt("demo_selloff_walk_forward"), demo_opp=opt("demo_opportunities"),
+        demo_slive=json.loads((OUT / "demo_selloff_live.json").read_text()) if (OUT / "demo_selloff_live.json").exists() else None,
         garch=json.loads((OUT / "garch_eval.json").read_text()) if (OUT / "garch_eval.json").exists() else None,
     )
 
 
-D = load()
+D = load(max((f.stat().st_mtime for f in OUT.iterdir()), default=0.0) if OUT.exists() else 0.0)
 if D is None:
     st.error("No outputs yet. Run `python -m bedrock.download` then `python -m bedrock.pipeline`.")
     st.stop()
@@ -362,14 +379,31 @@ html(f"<div class='bd-top'><div class='bd-brand'><span class='bd-mark'></span>Be
      f"<div class='bd-asof'>Prices to {nice_date(ASOF['stocks'])} · foreign flows to "
      f"{nice_date(ASOF['flows'], '%b %Y')}</div></div>")
 SCREENS = ["Overview", "Market depth", "Sell-off alert", "Crash risk", "Speculation", "Stress test", "Opportunities",
-           "Stock report", "Fundamentals (demo)", "Foreign flows by stock (demo)", "Market-ready", "Guide"]
+           "Stock report", "Sell-off alert (demo)", "Opportunities (demo)", "Fundamentals (demo)",
+           "Foreign flows by stock (demo)", "Market-ready", "Guide"]
 for s_, need in [("Crash risk", D["crash_sum"]), ("Opportunities", D["radar_sum"]), ("Stock report", D["radar_sum"]),
                  ("Fundamentals (demo)", len(D["demo"]) or None),
-                 ("Foreign flows by stock (demo)", len(D["demo_ff"]) or None)]:
+                 ("Foreign flows by stock (demo)", len(D["demo_ff"]) or None),
+                 ("Sell-off alert (demo)", D["demo_slive"]), ("Opportunities (demo)", len(D["demo_opp"]) or None)]:
     if need is None:
         SCREENS.remove(s_)
-screen = st.segmented_control("Screen", SCREENS, default="Overview", key="nav", label_visibility="collapsed",
-                              on_change=keep("nav", "Overview")) or "Overview"
+NAV = {"Overview": ["Overview"],
+       "Market": ["Market depth", "Sell-off alert", "Stress test"],
+       "Stocks": ["Crash risk", "Speculation", "Opportunities", "Stock report"],
+       "Demo (made-up data)": ["Sell-off alert (demo)", "Opportunities (demo)", "Fundamentals (demo)",
+                               "Foreign flows by stock (demo)"],
+       "Plan & guide": ["Market-ready", "Guide"]}
+NAV = {sec_: [s_ for s_ in pages_ if s_ in SCREENS] for sec_, pages_ in NAV.items()}
+NAV = {sec_: pages_ for sec_, pages_ in NAV.items() if pages_}
+section = st.segmented_control("Section", list(NAV), default="Overview", key="nav_sec", label_visibility="collapsed",
+                               on_change=keep("nav_sec", "Overview")) or "Overview"
+pages = NAV[section]
+if len(pages) > 1:
+    pkey = f"nav_p{list(NAV).index(section)}"
+    screen = st.segmented_control(f"{section} screens", pages, default=pages[0], key=pkey,
+                                  label_visibility="collapsed", on_change=keep(pkey, pages[0])) or pages[0]
+else:
+    screen = pages[0]
 html(f"<div class='bd-question'><span>THIS SCREEN ANSWERS</span>{QUESTIONS.get(screen, '')}</div>")
 if screen in USED_FOR:
     with st.expander("New here? What this screen is for, and how to read it"):
@@ -952,6 +986,79 @@ elif screen == "Fundamentals (demo)":
             "days_to_exit_10m": st.column_config.NumberColumn("Days to sell KES 10m", format="%.1f")})
     st.caption("With real financials this becomes the fourth part of the Opportunity Radar score, so it rates the "
                "business, not only the share price. See Market-ready for the data it needs.")
+
+# ================================================================= SELL-OFF ALERT (DEMO)
+elif screen == "Sell-off alert (demo)":
+    SL, SW, SF = D["demo_slive"], D["demo_swf"].copy(), D["demo_sf"].copy()
+    html("<div class='bd-demo'><b>DEMO · SYNTHETIC DATA.</b> A copy of the real Sell-off alert, run on made-up weekly "
+         "foreign flows, to show what Rock’s weekly data would add. The model code is the real one; the data and "
+         "therefore every number here are made up. The real Sell-off alert screen is unchanged.</div>")
+    a_ = SW["actual"].astype(bool)
+    calls = SW["xgboost"] >= HIGH_RISK_PROB
+    k, n = int(a_[calls].sum()), int(calls.sum())
+    hero("SELL-OFF ALERT (DEMO)", f"Demo: on weekly data the alert would update every week ({SL['signal']} this week)",
+         f"The model read {SL['probability']:.0%} for next week, against {SL['base_rate']:.0%} normally. Tested on "
+         f"{len(SW)} weeks instead of 78 months.", badge=SL["signal"])
+    kpis([(f"{len(SW)}", "test periods (weeks), against 78 months on real monthly data", True),
+          (f"{k} of {n}" if n else "0", "demo warnings followed by heavy selling", False),
+          (f"{int(a_[calls].sum())} of {int(a_.sum())}", "demo heavy-selling weeks warned about in advance", False)])
+    html("<div class='bd-note'><b>Read this right:</b> the made-up data has built-in “exit waves”, so the demo scores "
+         "say nothing about real skill. What it shows is real: the same code runs on weekly data and is tested on "
+         "about five times more periods.</div>")
+    model("XGBoost classifier (same code as the real alert)", "inputs: net foreign flow this week and over 3 weeks",
+          "tested week by week on data it had never seen", "data: synthetic")
+    c1, c2 = st.columns(2, gap="medium")
+    with c1:
+        sf = SF[SF["period"] >= SF["period"].max() - pd.Timedelta(days=3 * 365)]
+        f = go.Figure(go.Bar(x=sf["period"], y=sf["flow"] / 1e3, marker_line_width=0,
+                             marker_color=np.where(sf["flow"] < 0, RED, BLUE),
+                             hovertemplate="%{x|%d %b %Y}: KES %{y:,.2f}bn (demo)<extra></extra>"))
+        f.update_yaxes(ticksuffix="bn")
+        chart(f, "Demo: weekly net foreign flow", "Made-up data, last 3 years · red = net selling", 360)
+    with c2:
+        f = go.Figure()
+        f.add_scatter(x=SW["period"], y=SW["xgboost"], mode="lines", name="predicted chance",
+                      line=dict(color=BLUE, width=1.5), hovertemplate="%{x|%d %b %Y}: %{y:.0%}<extra></extra>")
+        hit = SW[SW["actual"] == 1]
+        f.add_scatter(x=hit["period"], y=hit["xgboost"], mode="markers", name="heavy selling followed",
+                      marker=dict(color=RED, size=6), hovertemplate="%{x|%d %b %Y}<extra></extra>")
+        f.update_yaxes(tickformat=".0%", range=[0, 1])
+        chart(f, "Demo: its warnings against what happened", "Each week predicted using only earlier weeks", 360,
+              legend=True)
+
+# ================================================================= OPPORTUNITIES (DEMO)
+elif screen == "Opportunities (demo)":
+    OD = D["demo_opp"].copy()
+    html("<div class='bd-demo'><b>DEMO · SYNTHETIC DATA.</b> A copy of the real Opportunity Radar for fictional "
+         "companies, with value and quality from company financials added to the score. Nothing here is real. The real "
+         "Opportunities screen is unchanged.</div>")
+    ok = OD[OD["exit_ok"]]
+    hero("OPPORTUNITIES (DEMO)", f"Demo: with company financials, {len(ok)} of {len(OD)} companies pass the exit check "
+         "and are ranked on five ingredients", "Momentum, stability and resilience (as on the real screen) plus value "
+         "and quality from financial statements. The exit check still comes first.")
+    moved = int((OD["score_full"].rank(ascending=False) != OD["score_price_only"].rank(ascending=False)).sum())
+    kpis([(f"{len(ok)} of {len(OD)}", "demo companies pass the exit check (KES 10m in 20 days)", False),
+          (f"{moved} of {len(OD)}", "demo companies change rank once financials are added", True),
+          (escape(ok.iloc[0]["company"]) if len(ok) else "-", "top demo opportunity you can get out of", False)])
+    model("Opportunity score with financials (demo)", "five equal ingredients", "same exit check as the real radar",
+          "not tested: needs real data")
+    c1, c2 = st.columns(2, gap="medium")
+    with c1:
+        top = ok.head(8).iloc[::-1]
+        f = go.Figure(go.Bar(x=top["score_full"], y=top["company"], orientation="h", marker_color=BLUE,
+                             marker_line_width=0, hovertemplate="<b>%{y}</b> (demo)<br>score %{x:.2f}<extra></extra>"))
+        f.update_xaxes(range=[0, 1])
+        chart(f, "Demo: top opportunities you can get out of", "Fictional companies · full five-part score", 380,
+              hbar=True)
+    with c2:
+        bl = OD[~OD["exit_ok"]].head(6).iloc[::-1]
+        f = go.Figure(go.Bar(x=bl["days_to_exit_10m"], y=bl["company"], orientation="h", marker_color=RED,
+                             marker_line_width=0, text=[f"{d:,.0f} days" for d in bl["days_to_exit_10m"]],
+                             textposition="outside", cliponaxis=False,
+                             hovertemplate="<b>%{y}</b> (demo)<br>%{x:,.0f} days to sell KES 10m<extra></extra>"))
+        f.update_xaxes(range=[0, bl["days_to_exit_10m"].max() * 1.35])
+        chart(f, "Demo: good on paper, but you can’t get out", "Fictional companies · trading days to sell KES 10m",
+              380, hbar=True)
 
 # ================================================================= FOREIGN FLOWS BY STOCK (DEMO)
 elif screen == "Foreign flows by stock (demo)":
