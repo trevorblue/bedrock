@@ -209,3 +209,20 @@ Merged the team's Rock Atlas ideas into Bedrock (nothing removed):
   upgrades that would make Bedrock production-grade (GARCH volatility, regime-switching, Hawkes, tail risk,
   calibration, monitoring and governance).
 - Tests: 15 pass (new: exit check, resilience has no look-ahead, demo is labelled). All 10 screens OK.
+
+## GARCH challenger, plain-English guide, second demo page, slides (17 Nov 2026)
+
+**GARCH volatility forecast** (`garch.py`), a stochastic time-series model, refitted each year on earlier data only.
+- V1, daily GARCH(1,1) with Student-t shocks: fitted for only 28% of stock-years (NSE prices move in ticks and many
+  days have no trades, so daily returns are lumpy and fits explode). Reported, not used.
+- V2, weekly GARCH(1,1) (normal QMLE), the standard thin-trading remedy: fits 84% of stock-years. Volatility
+  forecasts track reality as well as "the last 60 days repeat" (correlation 0.49 both; median error 37% vs 32%).
+- As a crash ranking, the riskiest 10% by GARCH crashed 11.8% of the time: best of six methods (live XGBoost 10.9%,
+  60-day rule 9.2%, XGBoost + GARCH 10.6%). Gain vs the 60-day rule: AUC +0.009 (95% range -0.011 to +0.029), so not
+  proven: GARCH runs as a challenger next to the live model. Test: future returns never change past forecasts.
+
+**Dashboard (12 screens):** every screen opens with "This screen answers: ..." and a "New here?" explainer; new
+**Guide** screen (all questions, every model with its result and what it means, glossary); GARCH block on Crash
+risk; second demo page **Foreign flows by stock (demo)** (synthetic, fictional companies, labelled).
+**Slides:** 13, adding GARCH, Opportunities, Stock report and Market-ready; last slide shows the new dashboard.
+**Checks:** 16 tests pass; all 12 screens OK.

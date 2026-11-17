@@ -37,3 +37,28 @@ def fundamentals_demo(n: int = 12, seed: int = DEMO_SEED) -> pd.DataFrame:
     d["exit_ok"] = d["days_to_exit_10m"] <= EXIT_DAYS
     d["data"] = LABEL
     return d.sort_values("score", ascending=False).reset_index(drop=True)
+
+
+def foreign_flows_demo(n_companies: int = 8, days: int = 60, seed: int = DEMO_SEED) -> pd.DataFrame:
+    """SYNTHETIC daily foreign buying and selling for fictional companies, to show what a per-stock, daily sell-off
+    alert would look like once Rock Data Plus provides foreign trading per stock. Not real; used nowhere else."""
+    rng = np.random.default_rng(seed + 1)
+    dates = pd.bdate_range(end="2026-11-16", periods=days)
+    rows = []
+    for i, c in enumerate("ABCDEFGHIJ"[:n_companies]):
+        turnover = np.exp(rng.normal(16 - 0.4 * i, 0.6, days))           # KES traded a day
+        drift = rng.normal(0, 0.08) - (0.25 if c in "BE" else 0)          # two companies under steady foreign selling
+        net_share = np.clip(rng.normal(drift, 0.25, days), -0.9, 0.9)     # net foreign flow as a share of turnover
+        for d, tv, s in zip(dates, turnover, net_share):
+            rows.append({"date": d, "company": f"Demo Company {c}", "turnover_kes": round(tv, -3),
+                         "net_foreign_kes": round(tv * s, -3), "net_foreign_share": round(s, 3), "data": LABEL})
+    return pd.DataFrame(rows)
+
+
+def foreign_alert_demo(flows: pd.DataFrame, window: int = 10, line: float = -0.15) -> pd.DataFrame:
+    """Demo rule: flag a company when foreigners were net sellers of more than 15% of its trading over 10 days."""
+    last = flows[flows["date"] >= flows["date"].drop_duplicates().nlargest(window).min()]
+    g = last.groupby("company").agg(net_foreign_kes=("net_foreign_kes", "sum"), turnover_kes=("turnover_kes", "sum"))
+    g["net_share"] = g["net_foreign_kes"] / g["turnover_kes"]
+    g["signal"] = np.where(g["net_share"] <= line, "HIGH RISK (demo)", "NO CALL (demo)")
+    return g.reset_index().sort_values("net_share")

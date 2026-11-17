@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bedrock import clean, crash, demo, depth, nse_ocr, radar, selloff, speculation, stress
+from bedrock import clean, crash, demo, depth, garch, nse_ocr, radar, selloff, speculation, stress
 
 
 # ------------------------------------------------------------------ helpers
@@ -204,3 +204,17 @@ def test_demo_data_is_labelled_and_fictional():
     d = demo.fundamentals_demo()
     assert d["company"].str.startswith("Demo Company").all()
     assert (d["data"] == demo.LABEL).all()
+
+
+# ------------------------------------------------------------------ GARCH volatility forecast
+def test_garch_forecast_uses_no_future_data():
+    rng = np.random.default_rng(3)
+    r = rng.standard_t(5, 600)
+    params = (0.0, 0.1, 0.1, 0.85)                       # mu, omega, alpha, beta
+    a = garch.forecast_path(r, params)
+    r2 = r.copy()
+    r2[400:] *= 10                                       # a storm after day 400 ...
+    b = garch.forecast_path(r2, params)
+    assert np.allclose(a[:400], b[:400])                 # ... cannot change any forecast made before it
+    assert b[450] > a[450]                               # but forecasts after it react
+    assert (a > 0).all()

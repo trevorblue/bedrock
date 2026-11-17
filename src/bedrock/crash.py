@@ -219,18 +219,28 @@ def live(samples_all: pd.DataFrame, panel: pd.DataFrame, features: list[str] = F
     imp = pd.DataFrame({"feature": features, "importance": m.feature_importances_})
     imp["label"] = imp["feature"].map(LABELS)
     keep = ["date", "code", "name", "close", "crash_prob", "risk_rank", "mom_1m", "mom_3m", "vol_60", "dd_1y",
-            "zero_60", "spikes_60"]
+            "zero_60", "spikes_60"] + (["garch_vol"] if "garch_vol" in now else [])
     return now[keep].sort_values("risk_rank").reset_index(drop=True), imp.sort_values("importance", ascending=False)
 
 
 def run(stocks, indices, flows, sectors=None) -> dict:
+    from . import garch
     panel = build_panel(stocks, indices, flows, sectors)
+    gv, gstats = garch.forecasts_weekly(stocks)                 # stochastic volatility forecast (challenger input)
+    panel = panel.merge(gv, on=["date", "code"], how="left").merge(garch.realized_forward(stocks),
+                                                                   on=["date", "code"], how="left")
     samples = month_end_samples(panel)
     wf = walk_forward(samples)
     wf_stock = walk_forward(samples, STOCK_FEATURES, models=("xgboost",)).rename(columns={"xgboost": "xgb_stock_only"})
-    wf = wf.merge(wf_stock[["date", "code", "xgb_stock_only"]], on=["date", "code"], how="left")
+    wf_garch = walk_forward(samples, FEATURES + ["garch_vol"], models=("xgboost",)).rename(columns={"xgboost": "xgb_garch"})
+    wf = (wf.merge(wf_stock[["date", "code", "xgb_stock_only"]], on=["date", "code"], how="left")
+            .merge(wf_garch[["date", "code", "xgb_garch"]], on=["date", "code"], how="left"))
+    wf["garch_rule"] = wf["garch_vol"].fillna(wf["vol_60"])     # GARCH forecast, or the 60-day figure where no fit
     compare = evaluate(wf, {"XGBoost, all inputs (live model)": "xgboost", "Logistic regression, all inputs": "logistic",
-                            "XGBoost, stock inputs only": "xgb_stock_only", "Rule: most volatile stocks": "vol_60"})
+                            "XGBoost, stock inputs only": "xgb_stock_only",
+                            "XGBoost + GARCH forecast (challenger)": "xgb_garch",
+                            "Rule: most volatile stocks": "vol_60", "Rule: highest GARCH forecast": "garch_rule"})
+    garch_eval = garch.evaluate(samples, FIRST_TEST_YEAR) | gstats
     robust = []
     for drop in (-0.10, -0.20):
         w = walk_forward(samples, models=("xgboost",), drop=drop)
@@ -244,6 +254,8 @@ def run(stocks, indices, flows, sectors=None) -> dict:
     now["risk_decile"] = 10 - ((now["risk_rank"] - 1) * 10 // len(now))
     now["group_crash_rate"] = now["risk_decile"].map(dec.set_index("decile")["crash_rate"])
     gap = auc_gap_ci(wf, "xgboost", "vol_60")
-    return {"panel": panel, "walk_forward": wf, "compare": compare, "by_year": by_year(wf), "deciles": dec,
+    garch_eval |= {"auc_gap_vs_last60_rule": auc_gap_ci(wf, "garch_rule", "vol_60"),
+                   "auc_gap_vs_live_model": auc_gap_ci(wf, "garch_rule", "xgboost")}
+    return {"panel": panel, "garch_eval": garch_eval, "walk_forward": wf, "compare": compare, "by_year": by_year(wf), "deciles": dec,
             "robust": pd.DataFrame(robust), "live": now, "importance": imp, "auc_gap_vs_volatility": gap,
             "n_samples": len(samples.dropna(subset=["fwd"])), "n_stocks": samples["code"].nunique()}

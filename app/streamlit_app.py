@@ -80,6 +80,9 @@ header[data-testid="stHeader"] {{ display: none; }}
              color: {MUTED}; line-height: 1.6; }}
 .bd-stock b {{ color: {INK}; }}
 .bd-foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 30px; padding-top: 12px; border-top: 1px solid {LINE}; }}
+.bd-question {{ margin: 22px 0 0; padding: 12px 16px; background: {CARD}; border: 1px solid {LINE};
+                border-left: 4px solid {ACCENT}; border-radius: 10px; font-size: 15.5px; color: {INK}; }}
+.bd-question span {{ font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: {MUTED}; margin-right: 8px; }}
 .bd-demo {{ border: 2px dashed {ACCENT}; border-radius: 14px; padding: 14px 18px; margin: 18px 0 4px;
             background: rgba(184,58,43,0.06); color: {INK}; font-size: 15px; line-height: 1.5; }}
 .bd-demo b {{ color: {ACCENT}; letter-spacing: .06em; }}
@@ -187,6 +190,100 @@ def nice_date(s: str, fmt: str = "%d %b %Y") -> str:
     return pd.Timestamp(s).strftime(fmt).lstrip("0")
 
 
+QUESTIONS = {
+    "Overview": "When the next sell-off comes, where does Kenya’s stock market break?",
+    "Market depth": "How easy is it to sell a share on the NSE without crashing its price?",
+    "Sell-off alert": "Will foreign investors sell heavily next month?",
+    "Crash risk": "Which stocks are most likely to fall 15% or more next month?",
+    "Speculation": "Which price jumps have no news behind them, and might be speculation?",
+    "Stress test": "If foreign investors sell a large amount quickly, which stocks break?",
+    "Opportunities": "Which stocks look attractive, and can you actually get out of them?",
+    "Stock report": "What does every Bedrock signal say about one stock, and how sure are we?",
+    "Fundamentals (demo)": "How would a value-and-quality screen work once company financials are added?",
+    "Foreign flows by stock (demo)": "What would a daily, stock-by-stock foreign selling alert look like with Rock’s data?",
+    "Market-ready": "What would make Bedrock better, and ready for real clients?",
+    "Guide": "What does each screen do, how good is each model, and what do the words mean?",
+}
+USED_FOR = {
+    "Overview": ("A 30-second summary for a meeting or the start of a demo.",
+                 ["Each card is the headline answer of one screen.", "Click a screen name at the top to see the evidence."]),
+    "Market depth": ("Fund managers check how long it would take to sell a holding before they buy it; Rock’s research "
+                     "team tracks whether the market is getting deeper or thinner.",
+                     ["Days to sell = how many trading days you need to sell your holding if you sell at most 20% of a "
+                      "normal day’s trading, so your own selling doesn’t crash the price.",
+                      "More than 20 trading days (about four weeks) counts as hard to sell.",
+                      "Change the position size to see how bigger holdings get stuck."]),
+    "Sell-off alert": ("An early warning, so investors can reduce risk before heavy foreign selling hits.",
+                       ["HIGH RISK = heavy foreign selling next month is more likely than usual. NO CALL = no reliable "
+                        "signal. It never says “safe”.",
+                        "Heavy selling = a month in the worst quarter of all months for foreign outflows.",
+                        "The track record shows how often its past warnings came true, on months it had never seen."]),
+    "Crash risk": ("A stock-by-stock watch list: which holdings to watch or trim.",
+                   ["Each month every stock is ranked from safest to riskiest. The riskiest tenth historically crashed "
+                    "about twice as often as average.",
+                    "Risk group 10 = the riskiest tenth of stocks; 1 = the safest tenth.",
+                    "The score is a ranking, not an exact probability. GARCH is a second, newer model shown below."]),
+    "Speculation": ("Leads for analysts and regulators: unusual price jumps to check against company news.",
+                    ["A flag = price and trading both jumped far above the stock’s normal while the market stayed calm.",
+                     "“No news found” makes it a lead worth checking. A flag is not proof of wrongdoing."]),
+    "Stress test": ("A “what if” for risk managers: what happens to each stock if foreigners sell a given amount quickly.",
+                    ["Absorbed = can be sold within the time window; strained = takes up to 4 times longer; trapped = "
+                     "takes longer still, or has no buyers.",
+                     "Bigger sales in thinner stocks move the price more (a standard rule of thumb).",
+                     "Move the sliders to try other amounts and speeds."]),
+    "Opportunities": ("A shortlist for investors and Rock’s research team, already filtered for whether you can get out.",
+                      ["Score 0 to 1 = the average of three ranks: momentum (rose over the last year), stability (calm "
+                       "price) and resilience (held up when the market fell).",
+                       "Exit check = could you sell the position within 20 trading days? If not, it is not an opportunity.",
+                       "The right-hand chart shows stocks that look great on paper but would be hard to sell."]),
+    "Stock report": ("A one-page brief on any stock, before a decision.",
+                     ["Each row is one Bedrock signal, with its evidence and how sure we are.",
+                      "“What would change this view” lists what to watch. It is not investment advice."]),
+    "Fundamentals (demo)": ("Shows judges and Rock what the platform will do once company financials are added.",
+                            ["Everything here is made-up data for fictional companies.",
+                             "Value = a cheap price relative to earnings and dividends; quality = profitable, low debt, "
+                             "growing. Grey bars fail the exit check, even in the demo."]),
+    "Foreign flows by stock (demo)": ("Shows Rock the #1 upgrade: daily foreign buying and selling for each stock "
+                                      "would turn the monthly, market-wide alert into a daily alert per stock.",
+                                      ["Everything here is made-up data for fictional companies.",
+                                       "Net foreign flow = foreign buying minus foreign selling; red bars mean "
+                                       "foreigners sold more than they bought that day.",
+                                       "The demo rule flags a company when foreigners were net sellers of more than "
+                                       "15% of its trading over the last 10 days. It is not tested."]),
+    "Market-ready": ("The plan to turn the prototype into a product clients use every week.",
+                     ["Priority shows what to add first. “Most needed” is daily foreign buying and selling for each stock."]),
+}
+GLOSSARY = [
+    ("Days to sell (days to exit)", "Trading days needed to sell a holding if you sell at most 20% of a normal day’s trading."),
+    ("20% of daily trading", "The most you sell in one day, so your own selling doesn’t crash the price."),
+    ("Liquidity, depth", "How easily a share can be bought or sold without moving its price."),
+    ("Net foreign flow", "Foreign investors’ buying minus their selling. Negative means they sold more than they bought."),
+    ("Heavy selling", "A month in the worst quarter of all months for net foreign outflows."),
+    ("HIGH RISK, NO CALL", "HIGH RISK is a warning. NO CALL means no reliable signal either way."),
+    ("Tested on months it never saw", "Every prediction was made using only data from before that date, then checked "
+     "against what really happened, as if it had been running live."),
+    ("Hit rate", "How often a warning came true."),
+    ("Normal rate, average", "How often the event happens anyway, with no model at all."),
+    ("Chance it’s luck (p-value)", "How likely the result is a fluke. Under 5% is usually treated as real."),
+    ("Ranking score (AUC)", "How well a model puts risky stocks above safe ones. 0.5 = random, 1.0 = perfect; 0.6 = modest skill."),
+    ("t (t-statistic)", "How many times bigger a result is than its normal wobble. Above 2 usually counts as proven."),
+    ("Volatility", "How much a price jumps around. Higher means riskier."),
+    ("GARCH", "A standard financial time-series model that forecasts volatility, knowing calm and stormy spells come in runs."),
+    ("Crash", "A fall of 15% or more over the next 21 trading days (about a month)."),
+    ("Risk group", "Stocks split into ten equal groups each month, from 1 (safest) to 10 (riskiest)."),
+    ("Momentum", "How much the price rose over the last year."),
+    ("Resilience", "How a stock did compared with the whole market in months the market fell."),
+    ("Exit check", "Could you sell the position within 20 trading days? Opportunities must pass it."),
+    ("XGBoost", "A machine-learning method that combines many small decision trees into one prediction."),
+    ("Isolation Forest", "A machine-learning method that spots unusual days because they are easy to separate from normal ones."),
+    ("Square-root price impact", "A standard rule of thumb: selling 4 times more moves the price about 2 times more."),
+    ("Trapped, strained, absorbed", "Stress-test outcomes: stuck for more than 4 times the window, up to 4 times, or within it."),
+    ("Block deal", "One huge pre-arranged trade, such as a takeover stake. Counted at most 10 times a normal day."),
+    ("Challenger model", "A newer model run next to the live one. It replaces the live model only if it keeps winning on new data."),
+    ("Synthetic, demo data", "Made-up numbers used only to show how a feature works. Never used as a finding."),
+]
+
+
 # ---------------------------------------------------------------- data
 @st.cache_data
 def load():
@@ -206,7 +303,8 @@ def load():
         crash_live=opt("crash_live"), crash_dec=opt("crash_deciles"), crash_cmp=opt("crash_compare"),
         crash_year=opt("crash_by_year"), crash_rob=opt("crash_robust"), crash_imp=opt("crash_importance"),
         radar_sum=json.loads((OUT / "radar_summary.json").read_text()) if (OUT / "radar_summary.json").exists() else None,
-        radar_live=opt("radar_live"), demo=opt("demo_fundamentals"),
+        radar_live=opt("radar_live"), demo=opt("demo_fundamentals"), demo_ff=opt("demo_foreign_flows"),
+        garch=json.loads((OUT / "garch_eval.json").read_text()) if (OUT / "garch_eval.json").exists() else None,
     )
 
 
@@ -264,13 +362,20 @@ html(f"<div class='bd-top'><div class='bd-brand'><span class='bd-mark'></span>Be
      f"<div class='bd-asof'>Prices to {nice_date(ASOF['stocks'])} · foreign flows to "
      f"{nice_date(ASOF['flows'], '%b %Y')}</div></div>")
 SCREENS = ["Overview", "Market depth", "Sell-off alert", "Crash risk", "Speculation", "Stress test", "Opportunities",
-           "Stock report", "Fundamentals (demo)", "Market-ready"]
+           "Stock report", "Fundamentals (demo)", "Foreign flows by stock (demo)", "Market-ready", "Guide"]
 for s_, need in [("Crash risk", D["crash_sum"]), ("Opportunities", D["radar_sum"]), ("Stock report", D["radar_sum"]),
-                 ("Fundamentals (demo)", len(D["demo"]) or None)]:
+                 ("Fundamentals (demo)", len(D["demo"]) or None),
+                 ("Foreign flows by stock (demo)", len(D["demo_ff"]) or None)]:
     if need is None:
         SCREENS.remove(s_)
 screen = st.segmented_control("Screen", SCREENS, default="Overview", key="nav", label_visibility="collapsed",
                               on_change=keep("nav", "Overview")) or "Overview"
+html(f"<div class='bd-question'><span>THIS SCREEN ANSWERS</span>{QUESTIONS.get(screen, '')}</div>")
+if screen in USED_FOR:
+    with st.expander("New here? What this screen is for, and how to read it"):
+        used, how = USED_FOR[screen]
+        st.markdown(f"**What it’s for:** {used}")
+        st.markdown("\n".join(f"- {h}" for h in how))
 
 # ================================================================= OVERVIEW
 if screen == "Overview":
@@ -494,6 +599,28 @@ elif screen == "Crash risk":
         chart(f, "The higher the risk group, the more often stocks crashed",
               f"Share that fell {drop:.0%}+ in the next month, by monthly risk group (test years only)", 400)
 
+    GE = D["garch"]
+    if GE and "Rule: highest GARCH forecast" in set(D["crash_cmp"]["model"]):
+        cm = D["crash_cmp"].set_index("model")
+        g_rule, live_m = cm.loc["Rule: highest GARCH forecast"], cm.iloc[0]
+        v_rule = cm.loc["Rule: most volatile stocks"]
+        gap = GE["auc_gap_vs_last60_rule"]
+        html("<div class='bd-eyebrow'>NEW · STOCHASTIC MODEL: GARCH VOLATILITY FORECAST</div><div class='bd-sub'>"
+             "Volatility is the strongest crash signal. GARCH, a standard financial time-series model, forecasts each "
+             "stock’s volatility for the next four weeks, knowing that calm and stormy spells come in runs. It was "
+             "refitted every year using only earlier data, and tested the same way as everything else.</div>")
+        kpis([(f"{g_rule['top10_crash_rate']:.1%}", "of the 10% GARCH expected to be most volatile crashed the next month",
+               True),
+              (f"{live_m['top10_crash_rate']:.1%}", "for the live model’s riskiest 10%", False),
+              (f"{v_rule['top10_crash_rate']:.1%}", "for the simple “last 60 days” volatility rule", False),
+              (f"{1 - GE['failed_or_explosive'] / GE['fits']:.0%}", "of stock-years where weekly GARCH fitted", False)])
+        html(f"<div class='bd-note'><b>How sure:</b> GARCH ranked crash risk best of all six methods tested, but the gain "
+             f"could still be chance (its ranking score is {gap['gap']:+.3f} vs the 60-day rule, likely range "
+             f"{gap['ci_low']:+.3f} to {gap['ci_high']:+.3f}). So it runs as a <b>challenger</b> next to the live model "
+             "and replaces it only if it keeps winning on new months. On daily data GARCH failed (NSE prices move in "
+             "small steps and many days have no trades), so it uses weekly returns.</div>")
+        model("GARCH(1,1) on weekly returns", "refitted each year on earlier data only", "forecasts the next 4 weeks",
+              f"{GE['fits']} yearly fits, {GE['n']:,} forecasts tested")
     with st.expander(f"All {len(CL)} stocks, ranked"):
         tb = CL[["risk_rank", "name", "crash_prob", "group_crash_rate", "mom_3m", "dd_1y"]].copy()
         tb["name"] = tb["name"].map(short)
@@ -826,6 +953,42 @@ elif screen == "Fundamentals (demo)":
     st.caption("With real financials this becomes the fourth part of the Opportunity Radar score, so it rates the "
                "business, not only the share price. See Market-ready for the data it needs.")
 
+# ================================================================= FOREIGN FLOWS BY STOCK (DEMO)
+elif screen == "Foreign flows by stock (demo)":
+    from bedrock.demo import foreign_alert_demo
+    FF = D["demo_ff"].copy()
+    AL = foreign_alert_demo(FF)
+    html("<div class='bd-demo'><b>DEMO · SYNTHETIC DATA.</b> Fictional companies and invented numbers, made only to "
+         "show what Bedrock would do with daily foreign buying and selling for each stock (the #1 upgrade on the "
+         "Market-ready screen). Nothing here is real, and no other screen uses it.</div>")
+    hero("FOREIGN FLOWS BY STOCK (DEMO)", "With per-stock data, the sell-off alert would become daily and stock by stock",
+         "Today Bedrock sees foreign selling only as one monthly total for the whole market. With Rock’s per-stock "
+         "data it could warn about each stock, every day.")
+    n_hi = int((AL["signal"] == "HIGH RISK (demo)").sum())
+    kpis([(f"{FF['company'].nunique()}", "fictional demo companies, 60 trading days", False),
+          (f"{n_hi}", "flagged by the demo rule (foreigners sold over 15% of trading, last 10 days)", True),
+          ("Daily", "how often the real alert could update with Rock’s data, instead of monthly", False)])
+    model("Per-stock foreign selling rule (demo)", "net foreign selling over the last 10 days, as a share of trading",
+          "not tested: needs real data")
+    a, b = st.columns([1.3, 1], gap="medium")
+    with a:
+        pick = st.selectbox("Demo company", sorted(FF["company"].unique()), key="ffpick")
+        g = FF[FF["company"] == pick]
+        f = go.Figure(go.Bar(x=g["date"], y=g["net_foreign_kes"] / 1e6, marker_line_width=0,
+                             marker_color=np.where(g["net_foreign_kes"] < 0, RED, BLUE),
+                             hovertemplate="%{x|%d %b}: KES %{y:,.1f}m (demo)<extra></extra>"))
+        f.update_yaxes(ticksuffix="m")
+        chart(f, f"Demo: daily net foreign flow, {pick}", "Fictional data · red = foreigners sold more than they bought",
+              360)
+    with b:
+        st.dataframe(AL[["company", "net_share", "signal"]], hide_index=True, width="stretch", height=360,
+                     column_config={"company": "Company (demo)",
+                                    "net_share": st.column_config.NumberColumn("Net foreign flow, 10 days, share of "
+                                                                               "trading", format="percent"),
+                                    "signal": "Demo signal"})
+    st.caption("With real per-stock data, this rule would be replaced by a model trained and tested the same way as "
+               "the other screens, and joined to the exit check and stress test.")
+
 # ================================================================= MARKET-READY
 elif screen == "Market-ready":
     hero("WHAT MAKES IT MARKET-READY", "Six data upgrades would take Bedrock from prototype to a weekly tool for "
@@ -863,9 +1026,9 @@ elif screen == "Market-ready":
          "will be tested the same honest way: trained only on the past, compared with a simple rule, reported in "
          "full.</div>")
     table(["Upgrade", "What it adds", "Improves"], [
-        ["<b>Volatility forecasting</b> (GARCH family)", "Forecasts how jumpy each stock will be next month, instead "
-         "of assuming the last 60 days repeat. Volatility is the strongest crash signal, so a better forecast "
-         "sharpens crash risk directly.", "Crash risk, stress test"],
+        ["<b>Volatility forecasting</b> (GARCH family)", "First version built and running as a challenger (weekly "
+         "GARCH): the best crash ranking in testing, not yet proven. Next: versions designed for thin trading, and "
+         "daily data from Rock.", "Crash risk, stress test"],
         ["<b>Regime-switching models</b> (Markov)", "Detects when the market has moved into an “exit wave”, the "
          "periods where most past sell-offs clustered (2020, 2022).", "Sell-off alert"],
         ["<b>Self-exciting selling models</b> (Hawkes)", "Captures how one heavy selling day raises the chance of the "
@@ -877,6 +1040,40 @@ elif screen == "Market-ready":
         ["<b>Model monitoring and governance</b>", "Live tracking of hit rates, alerts when data or accuracy drifts, "
          "versioned models, documented validation, and new models tested against the current one before they "
          "replace it.", "Every model"]])
+
+# ================================================================= GUIDE
+elif screen == "Guide":
+    hero("GUIDE", "What each screen answers, how good each model is, and what the words mean",
+         "Plain English, for anyone seeing Bedrock for the first time.")
+    table(["Screen", "The question it answers", "What it’s for"],
+          [[f"<b>{escape(s_)}</b>", escape(QUESTIONS[s_]), escape(USED_FOR[s_][0])] for s_ in SCREENS if s_ in USED_FOR])
+    html("<div class='bd-eyebrow'>EVERY MODEL, HOW WELL IT DID, AND WHAT THAT MEANS</div>")
+    table(["Model", "How well it did (tested on data it never saw)", "What that means", "Grade"], [
+        ["<b>Market depth</b><br>days to sell + K-means groups", "67% of shares need more than 20 days to sell KES 10m; "
+         "62–72% under every assumption", "A solid measurement: most of the market is hard to sell", pill("Strong", "good")],
+        ["<b>Sell-off alert</b><br>XGBoost on foreign flows", "Warnings came true 10 of 17 times (59%) vs 26% by chance; "
+         "under 1% chance of luck. Caught 10 of 20 sell-offs; 1 of the last 6", "A useful warning that misses about "
+         "half of sell-offs. Weekly data would sharpen it", pill("Medium", "ok")],
+        ["<b>Crash risk</b><br>XGBoost, 14 inputs", "Riskiest 10% crashed 10.9% of the time vs 5.5% average (2x); "
+         "safest 10%: 2.7%", "Real, but mostly driven by volatility: a simple rule gets 9.2%", pill("Medium", "ok")],
+        ["<b>GARCH volatility forecast</b><br>stochastic time-series (new)", "As a crash ranking: riskiest 10% crashed "
+         "11.8% of the time, best of six methods, but the gain could be chance. Volatility forecasts as accurate as "
+         "the 60-day rule", "Promising; runs as a challenger until it keeps winning on new months", pill("Promising", "ok")],
+        ["<b>Speculation watch</b><br>Isolation Forest", "12 of 21 checked flags had real news; after a flag small stocks "
+         "rose 4.4% more the next week", "Finds real events; the no-news flags are leads, not proof", pill("Good", "good")],
+        ["<b>Stress test</b><br>square-root price impact", "KES 2bn of foreign selling in a week traps 16 stocks, even "
+         "Equity", "A scenario, not a forecast, so it has no accuracy score", pill("Scenario", "na")],
+        ["<b>Exit check</b> (new)", "Without it, 42% (KES 1m) to 67% (KES 10m) of top picks could not be sold within "
+         "20 days", "Proven, and the most useful new idea: always ask “can you get out?”", pill("Strong", "good")],
+        ["<b>Opportunity radar</b><br>scoring rule (new)", "Top third beat bottom third by +0.7% a month (about +8% a "
+         "year) in 56% of months; could be chance about 1 time in 5", "Points the right way, not yet proven: a "
+         "shortlist, not a buy signal", pill("Not yet proven", "ok")],
+        ["<b>Resilience index</b> (new)", "Stocks that held up before did only 0.2% better in the next fall, which could "
+         "be chance", "Describes the past; it does not reliably repeat", pill("History only", "na")],
+        ["<b>Fundamentals</b> (demo)", "Not tested: synthetic data", "Shows what real company financials would add",
+         pill("Demo", "na")]])
+    html("<div class='bd-eyebrow'>GLOSSARY</div>")
+    table(["Word", "What it means"], [[f"<b>{escape(w)}</b>", escape(m)] for w, m in GLOSSARY])
 
 html("<div class='bd-foot'>Sources: NSE daily prices (Mendeley Data, Wanjawa, CC BY 4.0; extended to "
      f"{nice_date(ASOF['stocks'])} from NSE daily price lists) · CMA Quarterly Statistical Bulletins · Central Bank of "

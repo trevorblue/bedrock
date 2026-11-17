@@ -113,6 +113,7 @@ def main() -> None:
                      "auc_gap_vs_rule": cr["auc_gap_vs_volatility"],
                      "riskiest_now": cr["live"].head(5)["code"].tolist(), "as_of": cr["live"]["date"].max()}
     _json(crash_summary, OUT / "crash_summary.json")
+    _json(cr["garch_eval"], OUT / "garch_eval.json")
     print(f"  riskiest 10% crashed {mdl['top10_crash_rate']:.1%} of the time vs {mdl['base_rate']:.1%} average "
           f"(volatility rule {rule['top10_crash_rate']:.1%}); riskiest now: {', '.join(crash_summary['riskiest_now'])}")
 
@@ -127,6 +128,7 @@ def main() -> None:
     print(f"  top third beat bottom third by {s_['spread_avg']:+.2%} a month (t = {s_['spread_t']:.1f}); "
           f"{s_['paper_fail_share_1m']:.0%} of paper top picks fail the exit check at KES 1m")
     demo.fundamentals_demo().to_parquet(OUT / "demo_fundamentals.parquet", index=False)
+    demo.foreign_flows_demo().to_parquet(OUT / "demo_foreign_flows.parquet", index=False)
 
     print("Robustness checks ...")
     rb = robustness.run_all(stocks, share, sectors, sb["walk_forward"], sb["best_model"], scored, sb["dataset"])

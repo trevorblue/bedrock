@@ -42,7 +42,8 @@ def publish() -> None:
 def check() -> None:
     from streamlit.testing.v1 import AppTest
     screens = ["Overview", "Market depth", "Sell-off alert", "Crash risk", "Speculation", "Stress test",
-               "Opportunities", "Stock report", "Fundamentals (demo)", "Market-ready"]
+               "Opportunities", "Stock report", "Fundamentals (demo)", "Foreign flows by stock (demo)",
+               "Market-ready", "Guide"]
     bad = 0
     for s in screens:
         at = AppTest.from_file(str(ROOT / "app" / "streamlit_app.py"), default_timeout=120).run()
